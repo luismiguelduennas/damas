@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hilo Doble 5x5 - Prototipo de Optimización</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --cell: #334155;
+      --cell-hover: #475569;
+      --wall: #f59e0b;
+      --accent: #38bdf8;
+      --valid: #22c55e;
+      --invalid: #ef4444;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    header { text-align: center; margin-bottom: 18px; max-width: 760px; }
+    h1 { font-size: 1.7rem; letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px; }
+    .subtitle { font-size: 0.9rem; color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      max-width: 900px;
+      width: 100%;
+      align-items: start;
+    }
+
+    @media (max-width: 780px) {
+      .layout { grid-template-columns: 1fr; justify-items: center; }
+    }
+
+    /* TABLERO 5x5 */
+    .board-container {
+      background: var(--panel);
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+    }
+
+    .stats-bar {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 390px;
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 10px 14px;
+      border-radius: 10px;
+    }
+
+    .stat-badge span { font-weight: 700; color: var(--accent); }
+    .stat-badge.optimal span { color: var(--valid); }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, 72px);
+      grid-template-rows: repeat(5, 72px);
+      gap: 4px;
+      background: #0b1120;
+      padding: 8px;
+      border-radius: 12px;
+      position: relative;
+      user-select: none;
+    }
+
+    @media (max-width: 440px) {
+      .board {
+        grid-template-columns: repeat(5, 58px);
+        grid-template-rows: repeat(5, 58px);
+      }
+    }
+
+    .cell {
+      background: var(--cell);
+      border-radius: 4px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Paredes entre casillas y bordes */
+    .wall-top    { border-top: 5px solid var(--wall) !important; }
+    .wall-bottom { border-bottom: 5px solid var(--wall) !important; }
+    .wall-left   { border-left: 5px solid var(--wall) !important; }
+    .wall-right  { border-right: 5px solid var(--wall) !important; }
+
+    /* Marcas de posición inicial */
+    .start-mark {
+      position: absolute;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.45;
+    }
+    .start-white {
+      border: 3px dashed #ffffff;
+    }
+    .start-black {
+      border: 3px dashed #020617;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    /* Fichas (Damas) */
+    .piece {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      z-index: 5;
+      transition: transform 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .piece-white {
+      background: radial-gradient(circle at 32% 32%, #ffffff, #cbd5e1);
+      border: 3px solid #94a3b8;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 2px 4px #fff;
+      color: #0f172a;
+    }
+
+    .piece-black {
+      background: radial-gradient(circle at 32% 32%, #334155, #020617);
+      border: 3px solid #475569;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.2);
+      color: #f8fafc;
+    }
+
+    .piece.selected-first {
+      outline: 3px solid var(--accent);
+      outline-offset: 3px;
+      transform: scale(1.07);
+    }
+
+    /* Panel de Controles */
+    .controls-panel {
+      background: var(--panel);
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .order-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .order-btn {
+      padding: 10px;
+      border-radius: 10px;
+      border: 2px solid #334155;
+      background: #0f172a;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+    }
+
+    .order-btn.active {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.15);
+    }
+
+    /* Cruceta de Direcciones */
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      max-width: 220px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .dir-btn {
+      padding: 14px 0;
+      border-radius: 10px;
+      border: 2px solid #475569;
+      background: #1e293b;
+      color: var(--text);
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .dir-btn:hover:not(:disabled) {
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+    }
+
+    .dir-btn:disabled {
+      opacity: 0.35;
+      border-color: var(--invalid);
+      cursor: not-allowed;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn-primary { background: var(--accent); color: #0f172a; }
+    .btn-secondary { background: #334155; color: var(--text); }
+    .btn-solve { background: #8b5cf6; color: #fff; width: 100%; }
+
+    .settings-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.85rem;
+      background: rgba(15, 23, 42, 0.5);
+      padding: 12px;
+      border-radius: 10px;
+    }
+
+    .settings-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    select {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid #475569;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .status-box {
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      background: rgba(15, 23, 42, 0.8);
+      border-left: 4px solid var(--accent);
+      min-height: 48px;
+    }
+    .status-box.win {
+      border-left-color: var(--valid);
+      background: rgba(34, 197, 94, 0.15);
+    }
+    .status-box.error {
+      border-left-color: var(--invalid);
+    }
+
+    .solution-log {
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: #0f172a;
+      padding: 10px;
+      border-radius: 8px;
+      max-height: 130px;
+      overflow-y: auto;
+      display: none;
+    }
+    .solution-log.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>HILO DOBLE (5x5)</h1>
+    <p class="subtitle">Simulación paralela e inercia toroidal · Junta ambas fichas ortogonalmente</p>
+  </header>
+
+  <main class="layout">
+    <!-- TABLERO -->
+    <section class="board-container">
+      <div class="stats-bar">
+        <div class="stat-badge">Movimientos: <span id="moveCount">0</span></div>
+        <div class="stat-badge optimal">Óptimo (BFS): <span id="optimalCount">-</span></div>
+      </div>
+
+      <div id="board" class="board"></div>
+
+      <p style="font-size: 0.78rem; color: var(--muted); margin-top: 12px; text-align: center;">
+        💡 Bordes sin línea naranja permiten cruzar al lado opuesto (efecto Pac-Man).<br>
+        Atajos: <b>Espacio</b> cambia 1ª ficha · <b>Flechas / WASD</b> mueve.
+      </p>
+    </section>
+
+    <!-- CONTROLES -->
+    <aside class="controls-panel">
+      <div>
+        <div class="section-title">1. Selecciona qué ficha mueve 1º</div>
+        <div class="order-selector">
+          <button id="btnWhiteFirst" class="order-btn active" onclick="setFirstPiece('W')">
+            ⚪ Blanca 1º
+          </button>
+          <button id="btnBlackFirst" class="order-btn" onclick="setFirstPiece('B')">
+            ⚫ Negra 1º
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">2. Dirección (ambas fichas)</div>
+        <div class="dpad">
+          <div></div>
+          <button id="dir-UP" class="dir-btn" onclick="executeTurn('UP')" title="Arriba">▲</button>
+          <div></div>
+          <button id="dir-LEFT" class="dir-btn" onclick="executeTurn('LEFT')" title="Izquierda">◀</button>
+          <div style="display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--muted);" id="orderIndicator">⚪→⚫</div>
+          <button id="dir-RIGHT" class="dir-btn" onclick="executeTurn('RIGHT')" title="Derecha">▶</button>
+          <div></div>
+          <button id="dir-DOWN" class="dir-btn" onclick="executeTurn('DOWN')" title="Abajo">▼</button>
+          <div></div>
+        </div>
+      </div>
+
+      <div id="statusBox" class="status-box">
+        Elige qué ficha inicia el movimiento y pulsa una dirección.
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-secondary" onclick="resetBoard()">↺ Reiniciar Puzle</button>
+        <button class="btn btn-primary" onclick="generateNewPuzzle()">🎲 Nuevo Tablero</button>
+      </div>
+
+      <button class="btn btn-solve" onclick="toggleSolution()">🧠 Mostrar / Ocultar Ruta Óptima (BFS)</button>
+      <div id="solutionLog" class="solution-log"></div>
+
+      <div class="settings-group">
+        <div class="section-title" style="margin-bottom:2px;">Parámetros del Generador</div>
+        <div class="settings-row">
+          <label for="minMovesSelect">Profundidad mínima $g(n)$:</label>
+          <select id="minMovesSelect" onchange="generateNewPuzzle()">
+            <option value="3">3+ pasos</option>
+            <option value="4" selected>4+ pasos (Ideal)</option>
+            <option value="5">5+ pasos (Avanzado)</option>
+            <option value="6">6+ pasos (Experto)</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="ruleSelect">Condición de unión:</label>
+          <select id="ruleSelect" onchange="generateNewPuzzle()">
+            <option value="standard" selected>Contiguas (sin pared)</option>
+            <option value="no_collision">Sin choque directo final</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const SIZE = 5;
+    // vWalls[r][c] = pared a la derecha de (r,c), separándola de (r, (c+1)%5)
+    // hWalls[r][c] = pared debajo de (r,c), separándola de ((r+1)%5, c)
+    let vWalls = [];
+    let hWalls = [];
+
+    let startState = { wR: 0, wC: 0, bR: 4, bC: 4 };
+    let currentState = { wR: 0, wC: 0, bR: 4, bC: 4 };
+    let firstPiece = 'W'; // 'W' o 'B'
+    let moveCount = 0;
+    let optimalSolution = [];
+    let isAnimating = false;
+
+    const DIRS = {
+      UP:    { dr: -1, dc:  0, name: '▲ Arriba' },
+      DOWN:  { dr:  1, dc:  0, name: '▼ Abajo' },
+      LEFT:  { dr:  0, dc: -1, name: '◀ Izquierda' },
+      RIGHT: { dr:  0, dc:  1, name: '▶ Derecha' }
+    };
+
+    // Comprueba si hay pared saliendo de (r,c) en la dirección dir
+    function hasWallInDir(r, c, dirKey) {
+      if (dirKey === 'RIGHT') return vWalls[r][c];
+      if (dirKey === 'LEFT')  return vWalls[r][(c + SIZE - 1) % SIZE];
+      if (dirKey === 'DOWN')  return hWalls[r][c];
+      if (dirKey === 'UP')    return hWalls[(r + SIZE - 1) % SIZE][c];
+      return false;
+    }
+
+    // Simula el deslizamiento de 1 ficha teniendo a la otra fija en (otherR, otherC)
+    function slideSinglePiece(r, c, otherR, otherC, dirKey) {
+      const { dr, dc } = DIRS[dirKey];
+      let currR = r;
+      let currC = c;
+      let steps = 0;
+      let hitOther = false;
+      const path = [{ r: currR, c: currC }];
+
+      while (steps < SIZE) {
+        if (hasWallInDir(currR, currC, dirKey)) {
+          return { r: currR, c: currC, infinite: false, steps, hitOther, path };
+        }
+        const nextR = (currR + dr + SIZE) % SIZE;
+        const nextC = (currC + dc + SIZE) % SIZE;
+
+        if (nextR === otherR && nextC === otherC) {
+          hitOther = true;
+          return { r: currR, c: currC, infinite: false, steps, hitOther, path };
+        }
+
+        currR = nextR;
+        currC = nextC;
+        steps++;
+        path.push({ r: currR, c: currC });
+      }
+
+      // Si dio 5 pasos completos sin topar con pared ni otra ficha, es un bucle infinito Pac-Man
+      return { r, c, infinite: true, steps: SIZE, hitOther: false, path: [] };
+    }
+
+    // Simula el turno completo (Ficha 1º y luego Ficha 2º en la misma dirección)
+    function simulateTurn(state, order, dirKey) {
+      let { wR, wC, bR, bC } = state;
+
+      if (order === 'W') {
+        const res1 = slideSinglePiece(wR, wC, bR, bC, dirKey);
+        if (res1.infinite) return { valid: false, reason: 'La ficha Blanca entra en bucle infinito (Pac-Man sin paredes).' };
+        const res2 = slideSinglePiece(bR, bC, res1.r, res1.c, dirKey);
+        if (res2.infinite) return { valid: false, reason: 'La ficha Negra entra en bucle infinito (Pac-Man sin paredes).' };
+
+        const noChange = (res1.r === wR && res1.c === wC && res2.r === bR && res2.c === bC);
+        return {
+          valid: !noChange,
+          reason: noChange ? 'Ninguna ficha puede avanzar en esa dirección.' : '',
+          nextState: { wR: res1.r, wC: res1.c, bR: res2.r, bC: res2.c },
+          collided: res1.hitOther || res2.hitOther
+        };
+      } else {
+        const res1 = slideSinglePiece(bR, bC, wR, wC, dirKey);
+        if (res1.infinite) return { valid: false, reason: 'La ficha Negra entra en bucle infinito (Pac-Man sin paredes).' };
+        const res2 = slideSinglePiece(wR, wC, res1.r, res1.c, dirKey);
+        if (res2.infinite) return { valid: false, reason: 'La ficha Blanca entra en bucle infinito (Pac-Man sin paredes).' };
+
+        const noChange = (res2.r === wR && res2.c === wC && res1.r === bR && res1.c === bC);
+        return {
+          valid: !noChange,
+          reason: noChange ? 'Ninguna ficha puede avanzar en esa dirección.' : '',
+          nextState: { wR: res2.r, wC: res2.c, bR: res1.r, bC: res1.c },
+          collided: res1.hitOther || res2.hitOther
+        };
+      }
+    }
+
+    // Comprueba si las dos fichas están ortogonalmente contiguas (y sin pared entre ellas)
+    function isGoalState(state, collidedInLastMove = false) {
+      const ruleMode = document.getElementById('ruleSelect')?.value || 'standard';
+      if (ruleMode === 'no_collision' && collidedInLastMove) return false;
+
+      const { wR, wC, bR, bC } = state;
+      if (wR === bR && Math.abs(wC - bC) === 1) {
+        const minC = Math.min(wC, bC);
+        return !vWalls[wR][minC];
+      }
+      if (wC === bC && Math.abs(wR - bR) === 1) {
+        const minR = Math.min(wR, bR);
+        return !hWalls[minR][wC];
+      }
+      return false;
+    }
+
+    // Solver BFS (Breadth-First Search) para hallar la solución óptima
+    function solveBFS(initialState) {
+      const queue = [{ state: initialState, path: [] }];
+      const visited = new Set();
+      const key = (s) => `${s.wR},${s.wC},${s.bR},${s.bC}`;
+      visited.add(key(initialState));
+
+      while (queue.length > 0) {
+        const { state, path } = queue.shift();
+
+        for (const order of ['W', 'B']) {
+          for (const dirKey of ['UP', 'DOWN', 'LEFT', 'RIGHT']) {
+            const sim = simulateTurn(state, order, dirKey);
+            if (!sim.valid) continue;
+
+            if (isGoalState(sim.nextState, sim.collided)) {
+              return [...path, { order, dirKey }];
+            }
+
+            const k = key(sim.nextState);
+            if (!visited.has(k)) {
+              visited.add(k);
+              queue.push({
+                state: sim.nextState,
+                path: [...path, { order, dirKey }]
+              });
+            }
+          }
+        }
+      }
+      return null; // Sin solución
+    }
+
+    // Genera un tablero aleatorio garantizando la profundidad mínima elegida
+    function generateNewPuzzle() {
+      const minMoves = parseInt(document.getElementById('minMovesSelect').value, 10) || 4;
+      let attempts = 0;
+      let bestCandidate = null;
+
+      while (attempts < 400) {
+        attempts++;
+        vWalls = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+        hWalls = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+
+        // Colocar entre 8 y 12 paredes aleatorias (internas y de borde)
+        const numWalls = 9 + Math.floor(Math.random() * 4);
+        let placed = 0;
+        while (placed < numWalls) {
+          const isVert = Math.random() < 0.5;
+          const r = Math.floor(Math.random() * SIZE);
+          const c = Math.floor(Math.random() * SIZE);
+          if (isVert && !vWalls[r][c]) { vWalls[r][c] = true; placed++; }
+          else if (!isVert && !hWalls[r][c]) { hWalls[r][c] = true; placed++; }
+        }
+
+        // Posiciones iniciales en lados opuestos
+        const wR = Math.floor(Math.random() * SIZE);
+        const wC = Math.floor(Math.random() * 2); // Columnas 0-1
+        const bR = Math.floor(Math.random() * SIZE);
+        const bC = 3 + Math.floor(Math.random() * 2); // Columnas 3-4
+
+        const candidateStart = { wR, wC, bR, bC };
+        if (isGoalState(candidateStart)) continue;
+
+        const sol = solveBFS(candidateStart);
+        if (sol && sol.length >= minMoves) {
+          bestCandidate = {
+            vWalls: vWalls.map(row => [...row]),
+            hWalls: hWalls.map(row => [...row]),
+            start: candidateStart,
+            sol
+          };
+          break;
+        } else if (sol && (!bestCandidate || sol.length > bestCandidate.sol.length)) {
+          bestCandidate = {
+            vWalls: vWalls.map(row => [...row]),
+            hWalls: hWalls.map(row => [...row]),
+            start: candidateStart,
+            sol
+          };
+        }
+      }
+
+      if (bestCandidate) {
+        vWalls = bestCandidate.vWalls;
+        hWalls = bestCandidate.hWalls;
+        startState = { ...bestCandidate.start };
+        currentState = { ...bestCandidate.start };
+        optimalSolution = bestCandidate.sol;
+      }
+
+      moveCount = 0;
+      document.getElementById('solutionLog').classList.remove('visible');
+      updateStatus('Tablero generado. ¡Simula tu ruta mentalmente!', '');
+      renderAll();
+    }
+
+    function setFirstPiece(piece) {
+      firstPiece = piece;
+      document.getElementById('btnWhiteFirst').classList.toggle('active', piece === 'W');
+      document.getElementById('btnBlackFirst').classList.toggle('active', piece === 'B');
+      document.getElementById('orderIndicator').textContent = piece === 'W' ? '⚪→⚫' : '⚫→⚪';
+      updateDirectionButtons();
+    }
+
+    function executeTurn(dirKey) {
+      if (isAnimating) return;
+      const sim = simulateTurn(currentState, firstPiece, dirKey);
+
+      if (!sim.valid) {
+        updateStatus(`❌ Movimiento inválido: ${sim.reason}`, 'error');
+        return;
+      }
+
+      currentState = sim.nextState;
+      moveCount++;
+      renderAll();
+
+      if (isGoalState(currentState, sim.collided)) {
+        const diff = moveCount - optimalSolution.length;
+        const msg = diff === 0
+          ? `🏆 ¡SOLUCIÓN ÓPTIMA en ${moveCount} movimientos! Has igualado al algoritmo BFS.`
+          : `✅ ¡Fichas reunidas en ${moveCount} pasos! (El óptimo era ${optimalSolution.length}).`;
+        updateStatus(msg, 'win');
+      } else {
+        const label1 = firstPiece === 'W' ? 'Blanca' : 'Negra';
+        const label2 = firstPiece === 'W' ? 'Negra' : 'Blanca';
+        updateStatus(`Paso ${moveCount}: Movió 1º ${label1} y 2º ${label2} hacia ${DIRS[dirKey].name}.`, '');
+      }
+    }
+
+    function resetBoard() {
+      currentState = { ...startState };
+      moveCount = 0;
+      updateStatus('Tablero reiniciado a las marcas iniciales.', '');
+      renderAll();
+    }
+
+    function toggleSolution() {
+      const log = document.getElementById('solutionLog');
+      log.classList.toggle('visible');
+      if (optimalSolution.length === 0) {
+        log.innerHTML = 'Sin solución.';
+        return;
+      }
+      log.innerHTML = '<b>Secuencia óptima (' + optimalSolution.length + ' pasos):</b><br>' +
+        optimalSolution.map((step, i) => {
+          const p = step.order === 'W' ? '⚪ Blanca 1º' : '⚫ Negra 1º';
+          return `${i + 1}. <b>${p}</b> → ${DIRS[step.dirKey].name}`;
+        }).join('<br>');
+    }
+
+    function updateStatus(text, type) {
+      const box = document.getElementById('statusBox');
+      box.textContent = text;
+      box.className = 'status-box' + (type ? ' ' + type : '');
+    }
+
+    function updateDirectionButtons() {
+      for (const dirKey of ['UP', 'DOWN', 'LEFT', 'RIGHT']) {
+        const btn = document.getElementById(`dir-${dirKey}`);
+        const sim = simulateTurn(currentState, firstPiece, dirKey);
+        btn.disabled = !sim.valid;
+        btn.title = sim.valid ? DIRS[dirKey].name : sim.reason;
+      }
+    }
+
+    function renderAll() {
+      document.getElementById('moveCount').textContent = moveCount;
+      document.getElementById('optimalCount').textContent = optimalSolution.length;
+
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
+
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+
+          // Dibujar paredes (incluyendo bordes toroidales si están cerrados)
+          if (vWalls[r][c]) cell.classList.add('wall-right');
+          if (vWalls[r][(c + SIZE - 1) % SIZE]) cell.classList.add('wall-left');
+          if (hWalls[r][c]) cell.classList.add('wall-bottom');
+          if (hWalls[(r + SIZE - 1) % SIZE][c]) cell.classList.add('wall-top');
+
+          // Marcas iniciales
+          if (startState.wR === r && startState.wC === c) {
+            const mark = document.createElement('div');
+            mark.className = 'start-mark start-white';
+            cell.appendChild(mark);
+          }
+          if (startState.bR === r && startState.bC === c) {
+            const mark = document.createElement('div');
+            mark.className = 'start-mark start-black';
+            cell.appendChild(mark);
+          }
+
+          // Ficha Blanca
+          if (currentState.wR === r && currentState.wC === c) {
+            const p = document.createElement('div');
+            p.className = 'piece piece-white' + (firstPiece === 'W' ? ' selected-first' : '');
+            p.textContent = firstPiece === 'W' ? '1º' : '2º';
+            p.onclick = () => setFirstPiece('W');
+            cell.appendChild(p);
+          }
+
+          // Ficha Negra
+          if (currentState.bR === r && currentState.bC === c) {
+            const p = document.createElement('div');
+            p.className = 'piece piece-black' + (firstPiece === 'B' ? ' selected-first' : '');
+            p.textContent = firstPiece === 'B' ? '1º' : '2º';
+            p.onclick = () => setFirstPiece('B');
+            cell.appendChild(p);
+          }
+
+          boardEl.appendChild(cell);
+        }
+      }
+
+      updateDirectionButtons();
+    }
+
+    // Atajos de teclado
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setFirstPiece(firstPiece === 'W' ? 'B' : 'W');
+      } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault(); executeTurn('UP');
+      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault(); executeTurn('DOWN');
+      } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        e.preventDefault(); executeTurn('LEFT');
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        e.preventDefault(); executeTurn('RIGHT');
+      } else if (e.key === 'r' || e.key === 'R') {
+        resetBoard();
+      }
+    });
+
+    // Iniciar primer puzle
+    generateNewPuzzle();
+  </script>
+</body>
+</html>
